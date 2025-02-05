@@ -3,7 +3,7 @@ self.onmessage = ({ data }: MessageEvent<number[]>) => {
   for (const i of data) {
     self.postMessage(fib(i));
   }
-  console.log("end", data);
+  // console.log("end", data);
 };
 
 function fib(n: number): number {
