@@ -8,7 +8,7 @@ const workerFactory = () =>
   new Worker(import.meta.resolve("./worker.ts"), {
     type: "module",
   });
-const testData = Array.from({ length: 30 }, (_, i) => i + 1);
+const testData = Array.from({ length: 45 }, (_, i) => i + 1);
 const cpuCount = navigator.hardwareConcurrency || 4;
 
 Deno.test(async function execTest() {
@@ -17,6 +17,20 @@ Deno.test(async function execTest() {
   console.time("exec");
   const res = await exec(cpuCount, workerFactory, testData);
   console.timeEnd("exec");
+  console.log(res);
+});
+
+Deno.test(async function execErrorTryTest() {
+  const testData = Array.from({ length: 30 }, (_, i) => i + 1);
+  const workerFactory = () =>
+    new Worker(import.meta.resolve("./workerError.ts"), {
+      type: "module",
+    });
+  console.log(testData);
+  console.log("cpu", cpuCount);
+  console.time("execErrorTryTest");
+  const res = await exec(cpuCount, workerFactory, testData, Infinity);
+  console.timeEnd("execErrorTryTest");
   console.log(res);
 });
 

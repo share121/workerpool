@@ -22,6 +22,11 @@ addEventListener("error", (e) => {
 });
 
 function fib(n: number): number {
+  if (n === 30) {
+    if (new Date().getSeconds() % 2 === 0) {
+      throw new Error("test");
+    }
+  }
   if (n <= 1) return n;
   return fib(n - 1) + fib(n - 2);
 }
