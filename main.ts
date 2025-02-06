@@ -1,3 +1,4 @@
+// deno-lint-ignore-file ban-ts-comment
 export function exec<T, R>(
   threadCount: number,
   workerFactory: () => Worker,
@@ -25,11 +26,16 @@ export function exec<T, R>(
         retryCount: 0,
         stolen: false,
       } as WorkerData);
+      printWorkerData(workerData, i);
       const initialChunk = data.slice(startChunk, endChunk);
-      workerData.worker.postMessage(initialChunk);
-      const messageHandle = (workerData.worker.onmessage = (
-        e: MessageEvent<R>
-      ) => {
+      const messageHandle = (e: MessageEvent<R>) => {
+        // Deno 不能在主线程中捕获错误，所以这是折中的办法 start
+        // @ts-ignore
+        if (e.data?.type === "error") {
+          // @ts-ignore
+          return errorHandel(e.data);
+        }
+        // Deno 不能在主线程中捕获错误，所以这是折中的办法 end
         workerData.retryCount = 0;
         results[workerData.currentChunk] = {
           origin: data[workerData.currentChunk],
@@ -40,8 +46,8 @@ export function exec<T, R>(
         if (workerData.stolen) {
           workerData.worker.terminate();
           workerData.worker = workerFactory();
-          workerData.worker.onmessage = messageHandle;
-          workerData.worker.onerror = errorHandel;
+          workerData.worker.addEventListener("message", messageHandle);
+          workerData.worker.addEventListener("error", errorHandel);
           workerData.stolen = false;
         }
         let maxRemain = 0;
@@ -64,6 +70,8 @@ export function exec<T, R>(
         }
         console.log(`Worker ${i} stole from ${targetWorkerIndex}`);
         const targetWorker = workerPool[targetWorkerIndex];
+        printWorkerData(workerData, i);
+        printWorkerData(targetWorker, targetWorkerIndex);
         targetWorker.stolen = true;
         const splitPoint = Math.ceil(
           (targetWorker.currentChunk + targetWorker.endChunk) >>> 1
@@ -74,9 +82,11 @@ export function exec<T, R>(
           targetWorker.endChunk =
             splitPoint;
         const newChunk = data.slice(splitPoint, workerData.endChunk);
+        printWorkerData(workerData, i);
+        printWorkerData(targetWorker, targetWorkerIndex);
         workerData.worker.postMessage(newChunk);
-      });
-      const errorHandel = (workerData.worker.onerror = (err: ErrorEvent) => {
+      };
+      const errorHandel = (err: ErrorEvent) => {
         if (workerData.retryCount >= maxRetries) {
           for (let i = 0; i < workerPool.length; i++) {
             if (i in workerPool) workerPool[i].worker.terminate();
@@ -84,15 +94,15 @@ export function exec<T, R>(
           return reject(err);
         }
         workerData.retryCount++;
-        workerData.worker.terminate();
-        workerData.worker = workerFactory();
-        workerData.worker.onmessage = messageHandle;
-        workerData.worker.onerror = errorHandel;
         workerData.stolen = false;
+        printWorkerData(workerData, i, "try: ");
         workerData.worker.postMessage(
           data.slice(workerData.currentChunk, workerData.endChunk)
         );
-      });
+      };
+      workerData.worker.addEventListener("message", messageHandle);
+      workerData.worker.addEventListener("error", errorHandel);
+      workerData.worker.postMessage(initialChunk);
     }
   });
 }
@@ -104,6 +114,13 @@ interface WorkerData {
   currentChunk: number;
   retryCount: number;
   stolen: boolean;
+}
+
+function printWorkerData(workerData: WorkerData, i: number, msg: string = "") {
+  workerData;
+  console.log(
+    `${msg}Worker ${i}: ${workerData.startChunk}-${workerData.endChunk}:${workerData.currentChunk}:${workerData.retryCount}:${workerData.stolen}`
+  );
 }
 
 /** 单线程 */
